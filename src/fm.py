@@ -2,6 +2,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 import sys
+from io import TextIOWrapper
 
 
 def main():
@@ -39,7 +40,7 @@ def main():
 class rotating_string:
     x: str
 
-    def __getitem__(self, i) -> str:
+    def __getitem__(self, i: int) -> str:
         return self.x[(i) % len(self.x)]
 
     def _len__(self) -> int:
@@ -59,21 +60,119 @@ def sa_construct(x: str) -> list[int]:
 
 def bwt(x: str) -> str:
     "returns the last column of a BWT from string x"
+    x += "$"
     sa = sa_construct(x)
-    x = rotating_string(x)
+    rx = rotating_string(x)
 
-    l = [x[-1-i] for i in sa]
+    l = [rx[i-1] for i in sa]
     return ''.join(l)
 
 
-def compress(x: str) -> str:
+def rle(x: str) -> str:
     ''' compresses string x using run length encoding '''
-    rle = []
+    rle = ''
     run = 1
-    for i, c in enumerate(x):
+    end = len(x)
+    i = 1
+    while i < end:
+        if x[i] == x[i-1]:
+            run += 1
+            i += 1
+        else:
+            rle += str(run) + x[i-1]
+            run = 1
+            i += 1
+    else:
+        rle += str(run)+x[i-1]
+    return rle
 
-        if c == x[i+1]
+
+def compress(x: str) -> str:
+    l = bwt(x)
+    return rle(l)
+
+
+def decompress(x: str) -> str:
+    decom = ''
+    for i, c in zip(x[0::2], x[1::2]):
+        decom += int(i) * c
+    return decom
+
+
+def ith_occurence(i: int, c: str, x: str) -> int:
+    for j, char in enumerate(x):
+        if char == c:
+            i -= 1
+            if i < 0:
+                return j
+
+
+def reverse_bwt(l: str) -> str:
+    # yes, we know that we can radix the first alphabet by bit represenation, but hey this is python.
+    alpha = sorted(set(l))
+    buckets = {c: 0 for c in alpha}
+    f = [str()]*len(l)
+
+    # bucket sort the l column
+    for c in l:
+        buckets[c] += 1
+    accsum = 0
+    for bucket in buckets:
+        buckets[bucket], accsum = accsum, accsum + buckets[bucket]
+    for c in l:
+        f[buckets[c]] = c
+        buckets[c] += 1
+
+    # use buckets to repreesent ranks
+    rank = {c: 0 for c in alpha}
+    ranked_f: list[tuple[str, int]] = []
+    for char in f:
+        ranked_f.append((char, rank[char]))
+        rank[char] += 1
+
+    out = ""
+    # find sentinel
+    first = ith_occurence(0, '$', l)
+    out += ranked_f[first][0]
+    rank = ranked_f[first][1]
+
+    i = 1
+    while i < len(l):
+        next = ith_occurence(rank, out[i-1], l)
+        out += ranked_f[next][0]
+        rank = ranked_f[next][1]
+        i += 1
+    return out
+
+
+# For pre processing, i figured it might be worthwile to save the SA given, that it makes the FM index lookups easier.
+def pre_process(x: str, outfile: str):
+    t = compress(x)
+    sa = sa_construct(x+"$")
+
+    with open(outfile, "w") as file:
+        file.write(t+'\n')
+        file.write('\t'.join([str(i) for i in sa]))
+
+
+def read_preprocessed_genome(infile: TextIOWrapper) -> tuple[str, list[int], rotating_string]:
+    t = decompress(infile.readline())
+    sa = infile.readline().split("\t")
+    sa = [int(i) for i in sa]
+    genome = rotating_string(reverse_bwt(t))
+    return t, sa, genome
 
 
 if __name__ == '__main__':
-    main()
+    # main()
+    x = "mississippi"
+    sa = sa_construct(x+"$")
+    print(sa)
+    t = bwt(x)
+    print(t)
+    print(rle(t))
+    print(reverse_bwt(t))
+
+    comp = compress(t)
+    print(comp)
+    print(decompress(comp))
