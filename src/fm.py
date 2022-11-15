@@ -43,19 +43,43 @@ class rotating_string:
     def __getitem__(self, i: int) -> str:
         return self.x[(i) % len(self.x)]
 
-    def _len__(self) -> int:
+    def __len__(self) -> int:
         return len(self.x)
 
 
 def sa_construct(x: str) -> list[int]:
-    ''' 
-    Simple SA construction algorithm 
+    '''
+    Simple SA construction algorithm
 
     If we get a more efficient version running, this will be updated, but right now we just need a working version.
     '''
     suf = [x[i:] for i, _ in enumerate(x)]
     suf = sorted(suf)
     return [len(x) - len(i) for i in suf]
+
+
+def fm_search(x: rotating_string, p: str, sa: list[int]) -> list[int]:
+    # make c and o table (this should be moved to pre processing)
+    alpha = sorted(set(x.x))
+    c = {a: 0 for a in alpha}
+    for a in x.x:
+        c[a] += 1
+    accsum = 0
+    for bucket in c:
+        c[bucket], accsum = accsum, accsum + c[bucket]
+
+    # should probably stop using dict for this, and just map them down to indices in a list...
+    O = [{a: 0 for a in c} for _ in range(len(x)+1)]
+    for i, o in enumerate(O):
+        if i != 0 and i < len(x):
+            o[x[sa[i]]] = O[i-1][x[sa[i]]] + (x[sa[i]] == x[sa[i-1]])
+
+    print('\n'.join([str(foo) for foo in O]))
+
+    l, r = 0, len(x)
+    for a in p[::-1]:
+        if l == r:
+            break
 
 
 def bwt(x: str) -> str:
@@ -176,3 +200,4 @@ if __name__ == '__main__':
     comp = compress(t)
     print(comp)
     print(decompress(comp))
+    fm_search(rotating_string(x+"$"), "isi", sa)
