@@ -1,8 +1,10 @@
 from __future__ import annotations
 import argparse
 from dataclasses import dataclass
+from parsers import parse_fasta, parse_fastq
 import sys
-from io import TextIOWrapper
+from io import TextIOWrapper, BufferedReader, BufferedWriter
+import pickle
 
 
 def main():
@@ -12,7 +14,7 @@ def main():
     )
     argparser.add_argument(
         "-p", action="store_true",
-        help="preprocess the genome."
+        help="preprocess the genome. output is written to [genome].bin"
     )
     argparser.add_argument(
         "genome",
@@ -27,13 +29,40 @@ def main():
     args = argparser.parse_args()
 
     if args.p:
-        print(f"Preprocess {args.genome}")
+        print(f"Preprocess {args.genome.name}")
+        genome = parse_fasta(args.genome)
+        processed_genome = {chr: fm_index(genome[chr]) for chr in genome}
+        with open(f"{args.genome.name}.bin", "wb") as file:
+            pickle.dump(processed_genome, file)
+
     else:
         # here we need the optional argument reads
         if args.reads is None:
+            print("argument: reads is not optional")
             argparser.print_help()
             sys.exit(1)
-        print(f"Search {args.genome} for {args.reads}")
+
+        try:
+            with open(f"{args.genome.name}.bin", "rb") as file:
+                genome = pickle.load(file)
+        except FileNotFoundError:
+            print(
+                f"{args.genome.name} has not been preprocessed, you should probably do that... see how here:")
+            argparser.print_help()
+            sys.exit(1)
+
+        reads = parse_fastq(args.reads)
+
+        print(f"Search {args.genome.name} for {args.reads.name}")
+        out = []
+        for chr in genome:
+            for read in reads:
+                hits = genome[chr].search(reads[read])
+                for hit in hits:
+                    out.append(
+                        f'{read}\t{chr}\t{hit+1}\t{len(reads[read])}M\t{reads[read]}')
+        out.sort()
+        print('\n'.join(out))
 
 
 @dataclass
@@ -47,6 +76,34 @@ class rotating_string:
         return len(self.x)
 
 
+class fm_index:
+    rx: rotating_string
+    sa: list[int]
+    o: list[list[int]]
+    c: dict[str, int]
+    a_map: dict[str, int]
+
+    def __init__(self, x: str) -> None:
+        '''
+        constructs our fm index from a str
+        '''
+        self.rx, self.sa, self.o, self.c, self.a_map = pre_process(x)
+
+    def search(self, p: str) -> list[int]:
+        if not p or self.rx.x == '$':
+            return []
+        l, r = 0, len(self.rx)
+        for a in p[::-1]:
+            if l == r:
+                break
+            l = self.c[a] + self.o[l][self.a_map[a]]
+            r = self.c[a] + self.o[r][self.a_map[a]]
+        return self.sa[l:r]
+
+    def __repr__(self) -> str:
+        return f"{self.rx.x}\n{self.sa}\n{self.o}\n{self.c}"
+
+
 def sa_construct(x: str) -> list[int]:
     '''
     Simple SA construction algorithm
@@ -58,9 +115,12 @@ def sa_construct(x: str) -> list[int]:
     return [len(x) - len(i) for i in suf]
 
 
-def fm_search(x: rotating_string, p: str, sa: list[int]) -> list[int]:
-    # make c and o table (this should be moved to pre processing)
+def fm_preprocess(x: rotating_string, sa: list[int]) -> tuple[list[list[int]], dict[str, int], dict[str, int]]:
+    # make c and o table
     alpha = sorted(set(x.x))
+    a_map = {c: i for i, c in enumerate(alpha)}
+
+    # C table, leaving it as a dict, so we can
     c = {a: 0 for a in alpha}
     for a in x.x:
         c[a] += 1
@@ -69,19 +129,32 @@ def fm_search(x: rotating_string, p: str, sa: list[int]) -> list[int]:
         c[bucket], accsum = accsum, accsum + c[bucket]
 
     # should probably stop using dict for this, and just map them down to indices in a list...
-    O = [{a: 0 for a in c} for _ in range(len(x)+1)]
-    for i, o in enumerate(O):
-        if i != 0 and i < len(x):
-            o[x[sa[i]]] = O[i-1][x[sa[i]]] + (x[sa[i]] == x[sa[i-1]])
+    O = [[0 for _ in alpha] for _ in range(len(x)+1)]
+    for i in range(1, len(x)+1):
+        for a in a_map:
+            O[i][a_map[a]] = O[i-1][a_map[a]] + \
+                (a_map[a] == a_map[x[len(x) + sa[i-1]-1]])
 
-    print('\n'.join([str(foo) for foo in O]))
-
-    l, r = 0, len(x)
-    for a in p[::-1]:
-        if l == r:
-            break
+    return O, c, a_map
 
 
+def pre_process(x: str):
+    sa = sa_construct(x+'$')
+    rx = rotating_string(x+'$')
+    o, c, a_map = fm_preprocess(rx, sa)
+    return rx, sa, o, c, a_map
+
+
+def dump_fm(index: fm_index, file: BufferedWriter) -> None:
+    pickle.dump(obj=index, file=file)
+    return None
+
+
+def load_fm(file: BufferedReader) -> fm_index:
+    return pickle.load(file)
+
+
+# probably deprecated by now.
 def bwt(x: str) -> str:
     "returns the last column of a BWT from string x"
     x += "$"
@@ -169,35 +242,13 @@ def reverse_bwt(l: str) -> str:
     return out
 
 
-# For pre processing, i figured it might be worthwile to save the SA given, that it makes the FM index lookups easier.
-def pre_process(x: str, outfile: str):
-    t = compress(x)
-    sa = sa_construct(x+"$")
-
-    with open(outfile, "w") as file:
-        file.write(t+'\n')
-        file.write('\t'.join([str(i) for i in sa]))
-
-
-def read_preprocessed_genome(infile: TextIOWrapper) -> tuple[str, list[int], rotating_string]:
-    t = decompress(infile.readline())
-    sa = infile.readline().split("\t")
-    sa = [int(i) for i in sa]
-    genome = rotating_string(reverse_bwt(t))
-    return t, sa, genome
-
-
 if __name__ == '__main__':
-    # main()
-    x = "mississippi"
-    sa = sa_construct(x+"$")
-    print(sa)
-    t = bwt(x)
-    print(t)
-    print(rle(t))
-    print(reverse_bwt(t))
-
-    comp = compress(t)
-    print(comp)
-    print(decompress(comp))
-    fm_search(rotating_string(x+"$"), "isi", sa)
+    main()
+    #x = "mississippi"
+    #fm = fm_index(x)
+    # print(repr(fm))
+    # with open("test.bin", "wb") as file:
+    #    dump_fm(fm, file)
+    # with open("test.bin", "rb") as file:
+    #    loaded = load_fm(file)
+    # print(repr(loaded))
