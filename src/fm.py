@@ -29,7 +29,7 @@ def main():
     args = argparser.parse_args()
 
     if args.p:
-        print(f"Preprocess {args.genome.name}")
+        #print(f"Preprocess {args.genome.name}")
         genome = parse_fasta(args.genome)
         processed_genome = {chr: fm_index(genome[chr]) for chr in genome}
         with open(f"{args.genome.name}.bin", "wb") as file:
@@ -53,7 +53,7 @@ def main():
 
         reads = parse_fastq(args.reads)
 
-        print(f"Search {args.genome.name} for {args.reads.name}")
+        #print(f"Search {args.genome.name} for {args.reads.name}")
         out = []
         for chr in genome:
             for read in reads:
@@ -61,7 +61,7 @@ def main():
                 for hit in hits:
                     out.append(
                         f'{read}\t{chr}\t{hit+1}\t{len(reads[read])}M\t{reads[read]}')
-        out.sort()
+        # out.sort()
         print('\n'.join(out))
 
 
@@ -154,7 +154,7 @@ def load_fm(file: BufferedReader) -> fm_index:
     return pickle.load(file)
 
 
-# probably deprecated by now.
+# all of the below is deprecated, i was just playing around. gonna grab it into a seperate file later.
 def bwt(x: str) -> str:
     "returns the last column of a BWT from string x"
     x += "$"
@@ -244,11 +244,3 @@ def reverse_bwt(l: str) -> str:
 
 if __name__ == '__main__':
     main()
-    #x = "mississippi"
-    #fm = fm_index(x)
-    # print(repr(fm))
-    # with open("test.bin", "wb") as file:
-    #    dump_fm(fm, file)
-    # with open("test.bin", "rb") as file:
-    #    loaded = load_fm(file)
-    # print(repr(loaded))
