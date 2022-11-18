@@ -21,7 +21,3 @@ def test_compression():
     cor_com = "1i1p2s1m1$1p1i2s2i"
 
     assert compress(x) == cor_com
-
-
-def profile():
-    cProfile.run('fm_index("mississippi")')
