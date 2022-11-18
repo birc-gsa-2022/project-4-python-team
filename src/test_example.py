@@ -1,7 +1,8 @@
 # This directory will be checked with pytest. It will examine
 # all files that start with test_*.py and run all functions with
 # names that start with test_
-from fm import bwt, compress
+from fm import bwt, compress, fm_index
+import cProfile
 
 
 def test_1984():
@@ -22,6 +23,11 @@ def test_compression():
     assert compress(x) == cor_com
 
 
+def profile():
+    cProfile.run('fm_index("mississippi")')
+
+
 test_1984()
 test_correct_bwt_construction()
 test_compression()
+profile()
