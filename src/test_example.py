@@ -25,9 +25,3 @@ def test_compression():
 
 def profile():
     cProfile.run('fm_index("mississippi")')
-
-
-test_1984()
-test_correct_bwt_construction()
-test_compression()
-profile()
