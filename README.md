@@ -55,3 +55,11 @@ The pre-processing was tested by dumping an object to file and reloading, then c
 ## Running time
 
 *List experiments and results that show that both the preprocessing algorithm and the search algorithm works in the expected running time. Add figures by embedding them here, as you learned how to do in project 1.*
+
+Running time experiments for preprocessing (in our case creating the fm_index object) show something that looks like a $linear * log$ time curve, which is as expected. The sudden outliers in the end is probably just me checking Facebook when I got tired of waiting. Here, we go through 100 strings from 1000 to 100000 in length.
+
+![](figs/fmgenome.png)
+
+The search also performs as expected, O(n). Here, we search for 5 random strings of length 5 in each of the 100 preprocessed strings. 
+
+![](figs/fmreads.png)
