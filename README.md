@@ -20,6 +20,7 @@ Once you have implemented the `fm` program (and tested it to the best of your ab
 ## Preprocessing
 
 *What preprocessing data do you store in files, and how?*
+
 For pre-processing we ended up using pickle, there was some amount of fidling around with storing stuff in simple txt files. But hey, why invent a way to pack and parse stuff when those already exist. 
 We store all the necessary information in a class called fm index, this includes the Suffix array, the string (as a rotating string), a mapping between alphabet & index, and the O and C tables. 
 The pre processing calculates these and dumps them to a binary file using pickle.
