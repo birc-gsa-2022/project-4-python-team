@@ -1,0 +1,6 @@
+> chr1
+mississippi
+> chr2
+mississippimississippi
+> chr3
+
